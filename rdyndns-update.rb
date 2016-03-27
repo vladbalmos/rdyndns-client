@@ -66,7 +66,7 @@ def get_options_from_config(config_filepath)
     unless cfg.key? 'ttl'
         cfg['ttl'] = DEFAULT_TTL
     end
-    
+
     return cfg
 end
 
@@ -89,6 +89,27 @@ def prepare_options(commandline_options)
     return options
 end
 
+def make_nsupdate_command(options)
+    puts options
+
+    command = "#{options['nsupdate_path']}"
+    command += " -k #{options['private_key_path']}"
+
+    if options['nsupdate_debug_flag']
+        command += " -d"
+    end
+
+    if options['nsupdate_port'].to_i > 0
+        command += " -p #{options['nsupdate_port']}"
+    end
+
+    if options['nsupdate_timeout'].to_i > 0
+        command += " -t #{options['nsupdate_timeout']}"
+    end
+
+    return command
+end
+
 ##################################
 # Parse the command line arguments
 ##################################
@@ -97,10 +118,13 @@ commandline_options.ip = nil
 commandline_options.server = nil
 commandline_options.domain = nil
 commandline_options.zone = nil
-commandline_options.nsupdate_path = DEFAULT_NSUPDATE_PATH
 commandline_options.private_key_path = nil
 commandline_options.config_path = nil
 commandline_options.ttl = DEFAULT_TTL
+commandline_options.nsupdate_path = DEFAULT_NSUPDATE_PATH
+commandline_options.nsupdate_debug_flag = false
+commandline_options.nsupdate_port = nil
+commandline_options.nsupdate_timeout = nil
 
 opt_parser = OptionParser.new do |opts|
     opts.banner = "Usage: rdyndns-update.rb --ip=IP_ADDRESS [--config=/path/to/config || [options]]"
@@ -154,6 +178,22 @@ opt_parser = OptionParser.new do |opts|
         commandline_options.nsupdate_path = nsupdate_bin_path
     end
 
+    opts.on('--nsupdate_debug', 'Enable nsupdate debugging.') do
+        commandline_options.nsupdate_debug = true
+    end
+
+    opts.on('--nsupdate_port PORT', 'Set the remote port for the NS.') do |port|
+        commandline_options.nsupdate_port = port
+
+        validate_is_int port, "The port must be an integer greater than 0."
+    end
+
+    opts.on('--nsupdate_timeout TIMEOUT', 'Maximum time (in seconds) an update request can take before it is aborted.') do |timeout|
+        commandline_options.nsupdate_timeout = timeout
+
+        validate_is_int timeout, "The timeout must be an integer greater than 0."
+    end
+
     opts.on('-t', '--ttl SECONDS',
             'TTL value. Defaults to 60 seconds.') do |ttl|
         commandline_options.ttl = ttl
@@ -180,18 +220,11 @@ send
 EOT
 
 
-Open3.popen3 options['nsupdate_path'] do |stdin, stdout, stderr|
-    puts update_command
+nsupdate_command = make_nsupdate_command options
+
+Open3.popen3 nsupdate_command do |stdin, stdout, stderr|
     stdin.puts update_command
     stdin.close
     stderr.each_line { |line| puts line }
     stdout.each_line { |line| puts line }
 end
-
-
-# -d Debug flag
-# -D more debug flag
-# -k path to private key file
-# -p port number=53 [open firewall]
-# -t timeout before request is aborted
-# -r retries= defaul 3 

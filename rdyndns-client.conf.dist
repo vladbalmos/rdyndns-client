@@ -6,9 +6,13 @@ domain: subdomain.example.com
 
 # Zone corresponding to domain
 zone: example.com
+ttl: 60
 
 # Path to the nsupdate binary. Defaults to /usr/bin
 #nsupdate_path: /usr/bin/nsupdate
+#nsupdate_debug_flag: true
+#nsupdate_port: 53
+#nsupdate_timeout: 30
 
 # Path to the private key file used by nsupdate
 private_key_path: /root/.private_key_file
