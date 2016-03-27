@@ -1,0 +1,14 @@
+# The domain nameserver
+server: localhost
+
+# The domain to update
+domain: subdomain.example.com
+
+# Zone corresponding to domain
+zone: example.com
+
+# Path to the nsupdate binary. Defaults to /usr/bin
+#nsupdate_path: /usr/bin/nsupdate
+
+# Path to the private key file used by nsupdate
+private_key_path: /root/.private_key_file

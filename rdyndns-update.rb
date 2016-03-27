@@ -27,6 +27,10 @@ require "open3"
 require "optparse"
 require "ostruct"
 require "ipaddress"
+require "yaml"
+
+DEFAULT_NSUPDATE_PATH = '/usr/bin/nsupdate'
+DEFAULT_TTL = 60
 
 def validate_ip(ip)
     unless IPAddress.valid? ip
@@ -41,9 +45,48 @@ def validate_not_nil(val, error_msg)
 end
 
 def validate_file_exists(filepath, error_msg)
-    unless File.file? filepath
+    unless File.file? filepath.to_s
         abort error_msg
     end
+end
+
+def validate_is_int(value, error_msg)
+    unless value.is_a? Numeric || value < 1
+        abort error_msg
+    end
+end
+
+def get_options_from_config(config_filepath)
+    cfg = YAML.load_file config_filepath
+
+    unless cfg.key? 'nsupdate_path'
+        cfg['nsupdate_path'] = DEFAULT_NSUPDATE_PATH
+    end
+
+    unless cfg.key? 'ttl'
+        cfg['ttl'] = DEFAULT_TTL
+    end
+    
+    return cfg
+end
+
+def prepare_options(commandline_options)
+    if !commandline_options.config_path.nil?
+        options = get_options_from_config commandline_options.config_path
+    else
+        options = commandline_options.to_h
+    end
+
+    validate_ip commandline_options.ip
+    options['ip'] = commandline_options.ip
+    validate_not_nil options['server'], "The domain nameserver is required!"
+    validate_not_nil options['domain'], "The domain name is required!"
+    validate_not_nil options['zone'], "The zone is required!"
+    validate_is_int options['ttl'], "The ttl must be an integer greater than 0."
+    validate_file_exists options['private_key_path'], "The private key file was not found!"
+    validate_file_exists options['nsupdate_path'], "The nsupdate utility was not found!" 
+
+    return options
 end
 
 ##################################
@@ -54,11 +97,13 @@ commandline_options.ip = nil
 commandline_options.server = nil
 commandline_options.domain = nil
 commandline_options.zone = nil
-commandline_options.nsupdate_path = '/usr/bin/nsupdate'
-commandline_options.private_key_path = ''
+commandline_options.nsupdate_path = DEFAULT_NSUPDATE_PATH
+commandline_options.private_key_path = nil
+commandline_options.config_path = nil
+commandline_options.ttl = DEFAULT_TTL
 
 opt_parser = OptionParser.new do |opts|
-    opts.banner = "Usage: rdyndns-update.rb [options]"
+    opts.banner = "Usage: rdyndns-update.rb --ip=IP_ADDRESS [--config=/path/to/config || [options]]"
     opts.separator ""
     opts.separator "Options:"
 
@@ -67,6 +112,13 @@ opt_parser = OptionParser.new do |opts|
         commandline_options.ip = ip
 
         validate_ip ip
+    end
+
+    opts.on('-c', '--config CONFIG_PATH',
+            'Optional configuration file path in YAML format. Must contain the same keys as the command line arguments.') do |config_path|
+        commandline_options.config_path = config_path
+
+        validate_file_exists config_path, "The configuration file was not found!"
     end
 
     opts.on('-s', '--server DNS_SERVER',
@@ -97,34 +149,40 @@ opt_parser = OptionParser.new do |opts|
         validate_file_exists key_path, "The private key file was not found!"
     end
 
-    opts.on('-n', '--nsupdate NSUPDATE_BIN_PATh',
+    opts.on('-n', '--nsupdate NSUPDATE_BIN_PATH',
             'The path to the nsupdate utility. Defaults to /usr/bin/nsupdate') do |nsupdate_bin_path|
         commandline_options.nsupdate_path = nsupdate_bin_path
+    end
+
+    opts.on('-t', '--ttl SECONDS',
+            'TTL value. Defaults to 60 seconds.') do |ttl|
+        commandline_options.ttl = ttl
+    end
+
+    opts.on_tail("-h", "--help", "Show this message") do
+        puts opts
+        exit
     end
 end
 opt_parser.parse!(ARGV)
 
-##################################
-# Validate command line arguments
-##################################
-validate_ip commandline_options.ip
-validate_not_nil commandline_options.server, "The domain nameserver is required!"
-validate_not_nil commandline_options.domain, "The domain name is required!"
-validate_not_nil commandline_options.zone, "The zone is required!"
-validate_file_exists commandline_options.private_key_path, "The private key file was not found!"
-validate_file_exists commandline_options.nsupdate_path, "The nsupdate utility was not found!" 
+###############################
+# Validate and prepare options
+###############################
+options = prepare_options commandline_options
 
 update_command = <<-EOT
-server #{commandline_options.server}
-zone #{commandline_options.zone}
-update delete #{commandline_options.domain}. A
-update add #{commandline_options.domain}. A #{commandline_options.ip}
+server #{options['server']}
+zone #{options['zone']}
+update delete #{options['domain']}. A
+update add #{options['domain']}. #{options['ttl']} A #{options['ip']}
 send
 EOT
 
 
-Open3.popen3 commandline_options.nsupdate_path do |stdin, stdout, stderr|
+Open3.popen3 options['nsupdate_path'] do |stdin, stdout, stderr|
     puts update_command
+    stdin.puts update_command
     stdin.close
     stderr.each_line { |line| puts line }
     stdout.each_line { |line| puts line }
