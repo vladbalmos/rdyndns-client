@@ -59,8 +59,8 @@ end
 def get_options_from_config(config_filepath)
     cfg = YAML.load_file config_filepath
 
-    unless cfg.key? 'nsupdate_path'
-        cfg['nsupdate_path'] = DEFAULT_NSUPDATE_PATH
+    unless cfg.key? 'nsupdate'
+        cfg['nsupdate'] = DEFAULT_NSUPDATE_PATH
     end
 
     unless cfg.key? 'ttl'
@@ -84,7 +84,7 @@ def prepare_options(commandline_options)
     validate_not_nil options['zone'], "The zone is required!"
     validate_is_int options['ttl'], "The ttl must be an integer greater than 0."
     validate_file_exists options['private_key_path'], "The private key file was not found!"
-    validate_file_exists options['nsupdate_path'], "The nsupdate utility was not found!" 
+    validate_file_exists options['nsupdate'], "The nsupdate utility was not found!" 
 
     return options
 end
@@ -92,7 +92,7 @@ end
 def make_nsupdate_command(options)
     puts options
 
-    command = "#{options['nsupdate_path']}"
+    command = "#{options['nsupdate']}"
     command += " -k #{options['private_key_path']}"
 
     if options['nsupdate_debug_flag']
@@ -121,7 +121,7 @@ commandline_options.zone = nil
 commandline_options.private_key_path = nil
 commandline_options.config_path = nil
 commandline_options.ttl = DEFAULT_TTL
-commandline_options.nsupdate_path = DEFAULT_NSUPDATE_PATH
+commandline_options.nsupdate = DEFAULT_NSUPDATE_PATH
 commandline_options.nsupdate_debug_flag = false
 commandline_options.nsupdate_port = nil
 commandline_options.nsupdate_timeout = nil
@@ -175,7 +175,7 @@ opt_parser = OptionParser.new do |opts|
 
     opts.on('-n', '--nsupdate NSUPDATE_BIN_PATH',
             'The path to the nsupdate utility. Defaults to /usr/bin/nsupdate') do |nsupdate_bin_path|
-        commandline_options.nsupdate_path = nsupdate_bin_path
+        commandline_options.nsupdate = nsupdate_bin_path
     end
 
     opts.on('--nsupdate_debug', 'Enable nsupdate debugging.') do
